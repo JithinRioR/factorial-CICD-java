@@ -1,9 +1,12 @@
+```yaml
 name: Java Build Test Deploy
+
 on:
   push:
     branches:
       - main
   pull_request:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,7 +22,7 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v6
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: maven
 
@@ -53,7 +56,7 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v6
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: maven
 
@@ -76,5 +79,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             Write-Host "No old container found"
           }
+
       - name: Run new container
         run: docker run -d --name factorial-container -p 8080:8080 ghcr.io/${{ github.repository_owner }}/factorial-app:latest
+```
