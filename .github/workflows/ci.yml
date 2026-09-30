@@ -1,34 +1,80 @@
-name: Java CI
-
+name: Java Build Test Deploy
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
   pull_request:
-    branches: ["main"]
-
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - name: Setup Java
+        uses: actions/setup-java@v6
         with:
-          java-version: "21"
-          distribution: "temurin"
+          java-version: '17'
+          distribution: 'temurin'
           cache: maven
 
-      - name: Run tests
+      - name: Build Java project
+        run: mvn clean package -DskipTests
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: docker build -t ghcr.io/${{ github.repository_owner }}/factorial-app:latest .
+
+      - name: Push Docker image
+        run: docker push ghcr.io/${{ github.repository_owner }}/factorial-app:latest
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run JUnit 5 tests
         run: mvn test
 
-      - name: Build
-        run: mvn package
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
 
-      - name: Upload JAR artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: factorial-java
-          path: target/*.jar
+    steps:
+      - name: Pull latest Docker image
+        run: docker pull ghcr.io/${{ github.repository_owner }}/factorial-app:latest
+
+      - name: Remove old container
+        shell: powershell
+        run: |
+          docker rm -f factorial-container
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "No old container found"
+          }
+      - name: Run new container
+        run: docker run -d --name factorial-container -p 8080:8080 ghcr.io/${{ github.repository_owner }}/factorial-app:latest
